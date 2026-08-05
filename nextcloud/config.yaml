@@ -2,7 +2,7 @@ name: Woow Nextcloud
 version: 33.0.0-v3
 slug: woow-nextcloud
 description: Nextcloud all-in-one with PostgreSQL 16 (HTTP for LAN, use Cloudflare Tunnel for HTTPS)
-url: https://nextcloud.com
+url: https://github.com/WOOWTECH/Woow_ha_nextcloud
 webui: "http://[HOST]:[PORT:80]"
 arch:
   - aarch64
