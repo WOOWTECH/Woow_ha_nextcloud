@@ -123,6 +123,11 @@ devices:
   - /dev/vde2
   - /dev/vde3
   - /dev/vde4
+  - /dev/vdf
+  - /dev/vdf1
+  - /dev/vdf2
+  - /dev/vdf3
+  - /dev/vdf4
 schema:
   PUID: int(0,)
   PGID: int(0,)
