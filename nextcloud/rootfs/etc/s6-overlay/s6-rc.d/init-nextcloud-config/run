@@ -374,21 +374,118 @@ done
 OPTIONS_SOURCE=/data/options.json
 
 # Trusted domains
+#
+# `trusted_domains` is optional and has no default. When it is left empty
+# Nextcloud keeps only the `localhost` entry written by `occ maintenance:install`
+# and answers every request that carries the Home Assistant host in the Host
+# header with {"error":"Trusted domain error.","code":15}, which makes a fresh
+# install unreachable from the LAN. So the user's list is taken as-is and the
+# addresses this add-on can actually be reached on are appended to it.
+
+TRUSTED_DOMAINS=()
 mapfile -t TRUSTED_DOMAINS < <(jq -r '.trusted_domains // empty | .[]' "$OPTIONS_SOURCE")
 
-if [ "${#TRUSTED_DOMAINS[@]}" -gt 0 ]; then
-  occ config:system:del trusted_domains
-fi
-
-INDEX=0
+# User-supplied entries come first and are never dropped or replaced.
+FINAL_DOMAINS=()
 for DOMAIN in "${TRUSTED_DOMAINS[@]}"; do
   DOMAIN="$(echo "$DOMAIN" | xargs)"
-  echo "Setting trusted_domains[$INDEX] = $DOMAIN"
-  occ config:system:set trusted_domains "$INDEX" --value="$DOMAIN"
-  ((INDEX++))
+  if [ -n "$DOMAIN" ]; then
+    FINAL_DOMAINS+=("$DOMAIN")
+  fi
 done
 
-echo "trusted_domains updated successfully"
+# Append an auto-detected entry, unless it is already in the list.
+nc_add_trusted_domain() {
+  local candidate="$1"
+  local existing
+  if [ -z "$candidate" ] || [ "$candidate" = "null" ]; then
+    return 0
+  fi
+  for existing in "${FINAL_DOMAINS[@]}"; do
+    if [ "$existing" = "$candidate" ]; then
+      return 0
+    fi
+  done
+  FINAL_DOMAINS+=("$candidate")
+}
+
+# Loopback, for occ/cron and everything talking to Nextcloud inside the add-on.
+nc_add_trusted_domain "localhost"
+nc_add_trusted_domain "127.0.0.1"
+
+# This add-on's own container hostname, so other add-ons and reverse proxies
+# (Cloudflare Tunnel, NGINX Proxy Manager, ...) can reach it over the internal
+# Docker network.
+nc_add_trusted_domain "${HOSTNAME:-$(hostname 2>/dev/null)}"
+
+# The Home Assistant host itself: `webui: http://[HOST]:[PORT:80]` points at
+# whatever address the user reaches Home Assistant on, so that address has to be
+# trusted or the add-on is unusable straight after installation.
+HOST_ADDRESS_FOUND=false
+
+# The Supervisor's /info endpoint is readable by every add-on, no permission
+# needed. It gives the host name, which covers http://<hostname>.local access.
+HOST_HOSTNAME="$(bashio::info.hostname)"
+if [ -n "$HOST_HOSTNAME" ] && [ "$HOST_HOSTNAME" != "null" ]; then
+  nc_add_trusted_domain "$HOST_HOSTNAME"
+  nc_add_trusted_domain "${HOST_HOSTNAME}.local"
+fi
+
+# /network/info and /network/interface/<name>/info are granted to the default
+# add-on role, so `hassio_api: true` in config.yaml is all this needs.
+HOST_INTERFACES=()
+mapfile -t HOST_INTERFACES < <(bashio::network.interfaces)
+if [ "${#HOST_INTERFACES[@]}" -eq 0 ]; then
+  # Interface list unavailable: fall back to the primary interface only.
+  HOST_INTERFACES=("default")
+fi
+
+for INTERFACE in "${HOST_INTERFACES[@]}"; do
+  if [ -z "$INTERFACE" ]; then
+    continue
+  fi
+  HOST_ADDRESSES=()
+  mapfile -t HOST_ADDRESSES < <(bashio::network.ipv4_address "$INTERFACE")
+  for ADDRESS in "${HOST_ADDRESSES[@]}"; do
+    # The Supervisor reports CIDR notation, e.g. 192.168.1.50/24
+    ADDRESS="${ADDRESS%%/*}"
+    if [[ "$ADDRESS" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] && [ "$ADDRESS" != "127.0.0.1" ]; then
+      nc_add_trusted_domain "$ADDRESS"
+      HOST_ADDRESS_FOUND=true
+    fi
+  done
+done
+
+if [ "$HOST_ADDRESS_FOUND" != "true" ]; then
+  bashio::log.warning "----------------------------------------------------------------------"
+  bashio::log.warning "Could not determine the Home Assistant host's IP address, so it has"
+  bashio::log.warning "NOT been added to Nextcloud's trusted domains automatically."
+  bashio::log.warning "If the web interface answers with"
+  bashio::log.warning "  {\"error\":\"Trusted domain error.\",\"code\":15}"
+  bashio::log.warning "add the address you type in the browser (for example 192.168.1.50) to"
+  bashio::log.warning "the 'trusted_domains' option of this add-on and restart it."
+  bashio::log.warning "----------------------------------------------------------------------"
+fi
+
+# Rewrite the list, and only report what was really written.
+occ config:system:delete trusted_domains > /dev/null 2>&1
+
+INDEX=0
+APPLIED_DOMAINS=()
+for DOMAIN in "${FINAL_DOMAINS[@]}"; do
+  if occ config:system:set trusted_domains "$INDEX" --value="$DOMAIN" > /dev/null; then
+    APPLIED_DOMAINS+=("$DOMAIN")
+    INDEX=$((INDEX + 1))
+  else
+    bashio::log.warning "Failed to set trusted_domains[$INDEX] = $DOMAIN"
+  fi
+done
+
+if [ "${#APPLIED_DOMAINS[@]}" -eq 0 ]; then
+  bashio::log.error "Could not write any trusted_domains entry; Nextcloud will keep rejecting requests with 'Trusted domain error.'"
+else
+  bashio::log.info "trusted_domains: ${APPLIED_DOMAINS[*]}"
+fi
 
 # Trusted proxies
 mapfile -t TRUSTED_PROXIES < <(jq -r '.trusted_proxies // empty | .[]' "$OPTIONS_SOURCE")
