@@ -1,5 +1,5 @@
 name: Woow Nextcloud
-version: 33.0.0-v3
+version: "33.0.0-v3"
 slug: woow-nextcloud
 description: Nextcloud all-in-one with PostgreSQL 16 (HTTP for LAN, use Cloudflare Tunnel for HTTPS)
 url: https://github.com/WOOWTECH/Woow_ha_nextcloud
@@ -53,17 +53,17 @@ devices:
   - /dev/nvme2n1
   - /dev/nvme2n1p1
   - /dev/nvme2n1p2
-  - /dev/nvme2n3p3
+  - /dev/nvme2n1p3
   - /dev/nvme3
   - /dev/nvme3n1
   - /dev/nvme3n1p1
   - /dev/nvme3n1p2
-  - /dev/nvme3n3p3
+  - /dev/nvme3n1p3
   - /dev/nvme4
   - /dev/nvme4n1
   - /dev/nvme4n1p1
   - /dev/nvme4n1p2
-  - /dev/nvme4n3p3
+  - /dev/nvme4n1p3
   - /dev/sda
   - /dev/sda1
   - /dev/sda2
@@ -165,7 +165,10 @@ options:
   PUID: 1000
   PGID: 1000
   ADMIN_USER: admin
-  db_password: nextcloud
+  # Required — set these before starting the add-on.
+  # Home Assistant rejects known-breached passwords, so pick a fresh one.
+  ADMIN_PASS: null
+  db_password: null
   NEXTCLOUD_DATADIR: /share/nextcloud
   storage_mounts: []
   env_vars: []
@@ -177,4 +180,3 @@ ports_description:
   80/tcp: HTTP
   5432/tcp: PostgreSQL DB
   6379/tcp: Redis DB
-image: woowtech/woow-nextcloud
