@@ -5,8 +5,7 @@ source:
   version_template: regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-ls(?<build>\d+)$
 config:
   version_template: "{{major}}.{{minor}}.{{patch}}"
-  patch: 3
-  image: woowtech/woow-nextcloud
+  patch: 4
 build:
   image: ghcr.io/linuxserver/nextcloud
   version_template: "{{major}}.{{minor}}.{{patch}}-ls{{build}}"
