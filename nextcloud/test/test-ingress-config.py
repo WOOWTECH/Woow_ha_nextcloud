@@ -9,7 +9,9 @@ config = yaml.safe_load((ADDON_DIR / "config.yaml").read_text())
 assert config["ingress"] is True
 assert config["ingress_port"] == 8090
 assert config["ingress_entry"] == "login"
-assert config["ingress_stream"] is True
+assert config["ingress_stream"] is False
+assert config["schema"]["NEXTCLOUD_PUBLIC_URL"] == "str?"
+assert config["options"]["NEXTCLOUD_PUBLIC_URL"].startswith("https://")
 assert config["panel_admin"] is False
 assert config["panel_title"] == "Woow Nextcloud"
 assert config["watchdog"] == "http://[HOST]:[PORT:8090]/healthz"
@@ -22,15 +24,19 @@ required = [
     "listen 8090 default_server;",
     "allow 172.30.32.2;",
     "location = /healthz",
-    "proxy_pass http://127.0.0.1:80;",
-    "^/api/hassio_ingress/[A-Za-z0-9_-]{16,128}$",
-    "proxy_cookie_path / $safe_ingress_path/;",
-    "proxy_redirect ~^(/.*)$ $safe_ingress_path$1;",
-    "sub_filter 'href=\"/' 'href=\"$safe_ingress_path/';",
-    "sub_filter 'var _oc_webroot=\"\";' 'var _oc_webroot=\"$safe_ingress_path\";';",
+    "NEXTCLOUD_PUBLIC_URL",
+    "window.top.location.replace(u)",
+    "meta http-equiv=\"refresh\"",
 ]
 for needle in required:
-    assert needle in run, f"missing ingress adapter directive: {needle}"
+    assert needle in run, f"missing sidebar launcher directive: {needle}"
+
+for forbidden in [
+    "proxy_pass http://127.0.0.1:80;",
+    "proxy_cookie_path / $safe_ingress_path/;",
+    "sub_filter 'href=\"/'",
+]:
+    assert forbidden not in run, f"ingress must not proxy full Nextcloud UI anymore: {forbidden}"
 
 svc_dep = ADDON_DIR / "rootfs/etc/s6-overlay/s6-rc.d/svc-nginx/dependencies.d/init-nextcloud-ingress"
 user_content = ADDON_DIR / "rootfs/etc/s6-overlay/s6-rc.d/user/contents.d/init-nextcloud-ingress"
