@@ -25,7 +25,13 @@ if [[ ! -s /data/nextcloud/config/config.php ]]; then
     --admin-pass "$ADMIN_PASS" \
     --data-dir "$NEXTCLOUD_DATADIR"
 else
-  occ upgrade --no-interaction || true
+  if occ upgrade --no-interaction; then
+    :
+  else
+    upgrade_status=$?
+    echo "Nextcloud upgrade failed; stopping initialization. Restore a matching validated backup before retrying." >&2
+    exit "$upgrade_status"
+  fi
 fi
 # Core config that keeps public/direct URL stable and HA iframe usable.
 occ config:system:set trusted_domains 0 --value "$PUBLIC_HOST"
@@ -37,9 +43,8 @@ occ config:system:set overwriteprotocol --value https
 occ config:system:set default_phone_region --value "$DEFAULT_PHONE_REGION" || true
 occ config:system:set dbpassword --value "$DB_PASS" || true
 occ config:app:set password_policy minLength --value 7 || true
-if occ user:info "$ADMIN_USER" >/dev/null 2>&1; then
-  OC_PASS="$ADMIN_PASS" occ user:resetpassword --password-from-env "$ADMIN_USER" || true
-fi
+# ADMIN_PASS is only an initial-install credential. Preserve the existing
+# account password across upgrades/restarts; resets require an explicit action.
 occ config:system:set memcache.local --value '\OC\Memcache\APCu'
 occ config:system:set memcache.locking --value '\OC\Memcache\Redis'
 occ config:system:set redis host --value /run/redis/redis.sock
