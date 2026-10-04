@@ -7,6 +7,8 @@ ARG S6_OVERLAY_VERSION=3.2.1.0
 ARG BASHIO_VERSION=v0.17.5
 ARG TEMPIO_VERSION=2024.11.2
 ARG TARGETARCH
+# Official Collabora release keyring, fingerprint 7EB1530818B7683284483B7BD8915E456E7C440E.
+ARG COLLABORA_KEYRING_SHA256=b77f959916c0ec2072b72860d80f9c066910d9bddd2f69534b488f4b4d5ca4dd
 
 ENV DEBIAN_FRONTEND=noninteractive \
     NEXTCLOUD_ROOT=/var/www/nextcloud \
@@ -21,7 +23,10 @@ RUN apt-get update \
  && install -d -m 0755 /etc/apt/keyrings \
  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg \
  && echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
- && echo "deb [trusted=yes] https://www.collaboraoffice.com/repos/CollaboraOnline/CODE-deb ./" > /etc/apt/sources.list.d/collabora-code.list \
+ && curl --fail --show-error --location --proto '=https' --tlsv1.2 https://collaboraoffice.com/downloads/gpg/collaboraonline-release-keyring.gpg -o /etc/apt/keyrings/collabora.gpg \
+ && printf '%s  %s\n' "${COLLABORA_KEYRING_SHA256}" /etc/apt/keyrings/collabora.gpg | sha256sum -c - \
+ && chmod 0644 /etc/apt/keyrings/collabora.gpg \
+ && echo "deb [signed-by=/etc/apt/keyrings/collabora.gpg] https://www.collaboraoffice.com/repos/CollaboraOnline/CODE-deb ./" > /etc/apt/sources.list.d/collabora-code.list \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
       nginx redis-server postgresql-16 postgresql-client-16 \
