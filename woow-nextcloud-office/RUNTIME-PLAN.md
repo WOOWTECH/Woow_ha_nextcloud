@@ -93,6 +93,25 @@ Office PID 重啟及 Office 停用分支。所有服務／signal 都 stub，不�
 
 以上只驗證本地程式／stub control flow，沒有建置映像或完成 HAOS 驗收。
 
+## 新增：離線 candidate inventory gate（2026-10-05 續作）
+
+`qa/candidate_inventory.py` 與 [輸入規格／範例](qa/CANDIDATE-INVENTORY.md)
+提供獨立、純本地的 fail-closed JSON 證據檢查。涵蓋 CLI/FPM PHP8.4
+版本、modules/ini、FPM socket/PID、nginx、CODE observations，以及
+source/candidate PG16 libc/ICU/locale/database/collation inventory。
+缺漏、型別錯誤、失敗觀察、版本不符與 drift 都拒絕；不提供 refresh／
+reindex 或忽略 drift 的開關。CLI/FPM patch 不同與 default collation
+繼承處理曾以行為測試重現 2 failures，再修正。
+
+**這不是 runtime collector。** 它只讀指定 JSON；不執行命令、網路、DB、
+Docker/K8s/SSH 或服務操作。`qa/fixtures/candidate-inventory.stub.json`
+僅合成測試，digest 為假設格式值，不是建好的映像。exit0 只代表輸入
+一致；所有結果的 runtime/HAOS/production flags 固定 false。
+真正 bookworm→trixie libc/ICU 變更預期仍會被 gate 阻擋，需要另行核准
+的 migration/index-rebuild/full rollback 證據，不是本工具自行批准。
+
+此新增不解除下列 build/runtime gates，不改動既有 Dockerfile 或服務腳本。
+
 ## 尚未完成的 gates（不得跳過）
 
 1. **來源／artifact**：在批准環境完成 fresh signed APT update 與完整解析；
