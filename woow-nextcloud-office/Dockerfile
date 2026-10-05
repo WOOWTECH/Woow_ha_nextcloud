@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7
-FROM debian:bookworm-slim
+# Unreleased PHP8.4 prototype; build/runtime and collation gates: RUNTIME-PLAN.md.
+FROM debian:trixie-slim
 
 ARG BUILD_ARCH=amd64
 ARG NEXTCLOUD_VERSION=33.0.0
@@ -22,7 +23,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl gnupg xz-utils tar bzip2 unzip jq gosu procps iproute2 netcat-openbsd \
  && install -d -m 0755 /etc/apt/keyrings \
  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg \
- && echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+ && echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
  && curl --fail --show-error --location --proto '=https' --tlsv1.2 https://collaboraoffice.com/downloads/gpg/collaboraonline-release-keyring.gpg -o /etc/apt/keyrings/collabora.gpg \
  && printf '%s  %s\n' "${COLLABORA_KEYRING_SHA256}" /etc/apt/keyrings/collabora.gpg | sha256sum -c - \
  && chmod 0644 /etc/apt/keyrings/collabora.gpg \
@@ -30,10 +31,10 @@ RUN apt-get update \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
       nginx redis-server postgresql-16 postgresql-client-16 \
-      php8.2-fpm php8.2-cli php8.2-common php8.2-pgsql php8.2-curl php8.2-gd php8.2-intl php8.2-mbstring php8.2-xml php8.2-zip php8.2-bcmath php8.2-gmp php8.2-imagick php8.2-redis php8.2-apcu php8.2-bz2 \
-      imagemagick ffmpeg smbclient libsmbclient davfs2 coolwsd coolwsd-deprecated \
- && { echo 'apc.enable_cli=1'; echo 'memory_limit=1024M'; echo 'upload_max_filesize=16G'; echo 'post_max_size=16G'; } > /etc/php/8.2/cli/conf.d/99-woow-nextcloud-office.ini \
- && { echo 'memory_limit=1024M'; echo 'upload_max_filesize=16G'; echo 'post_max_size=16G'; echo 'opcache.enable=1'; } > /etc/php/8.2/fpm/conf.d/99-woow-nextcloud-office.ini \
+      php8.4-fpm php8.4-cli php8.4-common php8.4-pgsql php8.4-curl php8.4-gd php8.4-intl php8.4-mbstring php8.4-xml php8.4-zip php8.4-bcmath php8.4-gmp php8.4-imagick php8.4-redis php8.4-apcu php8.4-bz2 \
+      imagemagick ffmpeg smbclient libsmbclient0 davfs2 coolwsd coolwsd-deprecated \
+ && { echo 'apc.enable_cli=1'; echo 'memory_limit=1024M'; echo 'upload_max_filesize=16G'; echo 'post_max_size=16G'; } > /etc/php/8.4/cli/conf.d/99-woow-nextcloud-office.ini \
+ && { echo 'memory_limit=1024M'; echo 'upload_max_filesize=16G'; echo 'post_max_size=16G'; echo 'opcache.enable=1'; } > /etc/php/8.4/fpm/conf.d/99-woow-nextcloud-office.ini \
  && rm -rf /var/lib/apt/lists/*
 
 RUN case "${TARGETARCH:-${BUILD_ARCH}}" in \
