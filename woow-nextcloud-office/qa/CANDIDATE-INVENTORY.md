@@ -14,6 +14,11 @@ python3 woow-nextcloud-office/qa/candidate_inventory.py \
 python3 woow-nextcloud-office/test/test-candidate-inventory.py
 ```
 
+For strict local binding to raw image-manifest bytes, commits, architecture,
+package/archive hashes and provenance receipts, see [ARTIFACT-LOCK.md](ARTIFACT-LOCK.md).
+That separate gate composes this evaluator unchanged; it rejects this stub and
+never turns input consistency into authenticated build/runtime acceptance.
+
 The fixture's all-`a`/all-`b` image digests are format-only placeholders. They
 are not existing or locked images. Its matching source/candidate libc/ICU
 inventories are deliberately fabricated for unit tests, **not evidence about
