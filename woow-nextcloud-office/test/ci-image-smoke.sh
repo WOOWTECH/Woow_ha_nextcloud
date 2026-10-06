@@ -26,4 +26,6 @@ status=$(docker exec nc-smoke curl -fsS -H 'Host: localhost' http://127.0.0.1:80
 echo "$status"
 python3 -c "import json,sys; s=json.loads(sys.argv[1]); assert s['installed'] and not s['maintenance'] and s['versionstring']==sys.argv[2], s" "$status" "$EXPECT_NC"
 docker exec nc-smoke test -f /data/nextcloud/config/apps.config.php
+modes=$(docker exec nc-smoke stat -c '%a' /data/nextcloud/config /data/nextcloud/config/config.php /share/nextcloud | tr '\n' ' ')
+[[ "$modes" == "750 640 770 " ]] || { echo "unexpected modes (config dir, config.php, data dir): $modes" >&2; exit 1; }
 echo "smoke OK: $IMAGE runs Nextcloud $EXPECT_NC"

@@ -63,6 +63,11 @@ occ config:system:set redis port --value 0 --type integer
 occ config:system:set maintenance_window_start --value 1 --type integer || true
 # Allow framing by HA/public hosts.
 php -r '$f="/data/nextcloud/config/config.php"; include $f; $c=$CONFIG ?? []; $tp=$c["trusted_proxies"]??[]; if (!is_array($tp)) { $tp=[$tp]; } $c["trusted_proxies"]=array_values(array_unique(array_merge($tp, ["127.0.0.1","172.30.32.2"]))); $c["overwritehost"]="'"$PUBLIC_HOST"'"; $out="<?php\n\$CONFIG = ".var_export($c,true).";\n"; file_put_contents($f,$out);'
+# HA backup/restore does not preserve file modes (seen: config.php 0640 -> 0644 after a
+# Supervisor restore). Re-assert them on every boot: config holds DB and instance secrets.
+chmod 0750 /data/nextcloud/config
+find /data/nextcloud/config -maxdepth 1 -type f -name '*.php' -exec chmod 0640 {} +
+chmod 0770 "$NEXTCLOUD_DATADIR"
 # Disable first-run modal and notify_push unless explicitly configured later.
 occ app:disable firstrunwizard || true
 occ app:disable notify_push || true
