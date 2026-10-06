@@ -27,3 +27,7 @@ Thumbs.db
 
 # Vibe images
 .vibe-images/
+
+# Python bytecode
+__pycache__/
+*.pyc
