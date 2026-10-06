@@ -29,3 +29,10 @@ assert 'sha256sum -c -' in dockerfile
 assert 'ARG NEXTCLOUD_SHA256=' in dockerfile and 'ARG NEXTCLOUD_KEY_FPR=28806A878AE423A28372792ED75899B9A724937A' in dockerfile
 assert 'verify-nextcloud.sh /tmp/nextcloud.tar.bz2 /tmp/nextcloud.tar.bz2.asc' in dockerfile
 assert dockerfile.index('verify-nextcloud.sh /tmp/nextcloud.tar.bz2') < dockerfile.index('tar -xjf /tmp/nextcloud.tar.bz2')
+# App store apps (richdocuments) must live in the persistent custom_apps, not the image's apps/.
+init_nc = (BASE / 'rootfs/etc/s6-overlay/s6-rc.d/init-nextcloud-config/run').read_text()
+assert 'apps.config.php' in init_nc and "'writable' => true" in init_nc and '/var/www/nextcloud/custom_apps' in init_nc
+assert init_nc.index('apps.config.php') < init_nc.index('occ maintenance:install') and init_nc.index('apps.config.php') < init_nc.index('occ upgrade')
+# No unconditional re-download on every boot; update only when the enabled check fails.
+assert 'occ app:install richdocuments || true' not in rich
+assert 'occ app:update richdocuments' in rich and 'app:getpath richdocuments' in rich

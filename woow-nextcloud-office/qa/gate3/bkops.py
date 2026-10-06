@@ -28,7 +28,7 @@ def scaled_down():
 def run(action, ident):
     assert ident.replace('-', '').replace('.', '').isalnum()
     scaled_down()
-    name = f'{action}-{ident}'.replace('.', '')[:60]
+    name = (f'{action}-{ident}'.replace('.', '')[:45] + '-' + time.strftime('%H%M%S')).lower()  # unique per run
     script = BACKUP if action == 'backup' else RESTORE
     job = {'apiVersion': 'batch/v1', 'kind': 'Job', 'metadata': {'name': name, 'namespace': NS, 'labels': LABELS}, 'spec': {'backoffLimit': 0, 'activeDeadlineSeconds': 3600, 'template': {'metadata': {'labels': LABELS}, 'spec': {
         'automountServiceAccountToken': False, 'restartPolicy': 'Never', 'securityContext': {'seccompProfile': {'type': 'RuntimeDefault'}},

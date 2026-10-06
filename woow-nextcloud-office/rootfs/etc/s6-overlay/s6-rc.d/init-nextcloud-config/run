@@ -12,6 +12,17 @@ gosu postgres psql -h /run/postgresql -tc "SELECT 1 FROM pg_database WHERE datna
 mkdir -p /data/nextcloud/config /data/nextcloud/custom_apps "$NEXTCLOUD_DATADIR"
 if [[ ! -L /var/www/nextcloud/config ]]; then rm -rf /var/www/nextcloud/config; ln -s /data/nextcloud/config /var/www/nextcloud/config; fi
 if [[ ! -L /var/www/nextcloud/custom_apps ]]; then rm -rf /var/www/nextcloud/custom_apps; ln -s /data/nextcloud/custom_apps /var/www/nextcloud/custom_apps; fi
+# App store apps go to the persistent custom_apps (symlink to /data); the image's
+# apps/ stays read-only so a new image never silently drops an installed app.
+cat > /data/nextcloud/config/apps.config.php <<'APPS'
+<?php
+$CONFIG = [
+  'apps_paths' => [
+    ['path' => '/var/www/nextcloud/apps', 'url' => '/apps', 'writable' => false],
+    ['path' => '/var/www/nextcloud/custom_apps', 'url' => '/custom_apps', 'writable' => true],
+  ],
+];
+APPS
 chown -R www-data:www-data /data/nextcloud "$NEXTCLOUD_DATADIR" /var/www/nextcloud
 if [[ ! -s /data/nextcloud/config/config.php ]]; then
   echo "Installing Nextcloud..."

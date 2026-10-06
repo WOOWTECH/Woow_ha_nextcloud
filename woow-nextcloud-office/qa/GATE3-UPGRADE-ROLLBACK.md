@@ -40,3 +40,18 @@ admin＋兩個普通帳戶（各自原密碼 DAV 登入）、marker 檔 hash、�
 
 - 以**舊 HA（bookworm／PHP 8.2）產生的資料**升到新封裝（含 glibc／ICU 變化對 PG 索引的影響）；本次起點是新封裝自己的 33.0.0。
 - HAOS／Supervisor（ingress、add-on 備份還原、啟停）、ARM、CODE 瀏覽器開檔編輯、正式維護窗口。
+
+## 追加（2026-10-06）：richdocuments 改為持久安裝（使用者核准）
+
+修改：`init-nextcloud-config` 寫入 `apps.config.php`，只讓持久的 `custom_apps` 可寫；`init-richdocuments-config` 只在元件缺少時安裝、在升級後被判不相容時才 `app:update`，routes 修補只在檔案真的改變時才重新啟用。
+
+以 ConfigMap 疊加新腳本到叢集候選實測：
+
+| 情境 | 結果 |
+|---|---|
+| 舊安裝（元件在非持久 `apps/`）換上新腳本 | 自動安裝到 `/data/nextcloud/custom_apps/richdocuments`（10.3.2），routes 修補套用 |
+| 一般重開機 | 無安裝／更新，`info.xml` mtime 不變，CODE discovery 200 |
+| 換映像 33.0.0→33.0.9 | 元件原封不動（仍 10.3.2），不再「停用→重下載」 |
+| 主版本 33→34 | Nextcloud 判不相容停用 → 腳本 `app:update` 到 11.1.2 → 啟用；34 上重開機 mtime 不變 |
+
+測試後已移除疊加並以 B0 還原，快照與基準逐字相同。
