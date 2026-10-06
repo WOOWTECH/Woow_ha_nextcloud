@@ -36,7 +36,8 @@
 ### 發現
 
 1. 升級失敗時容器仍維持 Running（s6 預設 `S6_BEHAVIOUR_IF_STAGE2_FAILS=0`）。HAOS watchdog 以 8090 `/healthz` 可偵測；在 k8s 上需另加 probe。
-2. Dockerfile 下載 Nextcloud tarball 時沒有 checksum／簽章驗證（供應鏈缺口，Gate 3 建新版本映像前修正）。
+2. Dockerfile 下載 Nextcloud tarball 時原本沒有 checksum／簽章驗證。已修正：`build/verify-nextcloud.sh` 檢查固定 SHA256 並以固定發行金鑰（`28806A87…A724937A`）驗 `.asc`；以真實 33.0.0 tarball 測：正確通過，錯 SHA／竄改後同步改 SHA／他版簽章／錯指紋皆失敗。回溯核對：本候選映像 25,237 個核心檔與已驗證官方 33.0.0 tarball 逐檔雜湊相同。
+3. richdocuments（1,261 檔）於開機時由 app store 安裝到容器層 `apps/`，不是持久的 `custom_apps`：每次開機重新下載，依賴 app store 可用；Gate 3 需處理 app 版本相容。
 
 ## 未完成
 

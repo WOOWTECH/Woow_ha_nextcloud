@@ -25,3 +25,7 @@ assert '[trusted=yes]' not in dockerfile
 assert 'signed-by=/etc/apt/keyrings/collabora.gpg' in dockerfile
 assert 'COLLABORA_KEYRING_SHA256' in dockerfile
 assert 'sha256sum -c -' in dockerfile
+# Nextcloud server archive: pinned SHA256 and signature by the pinned release key.
+assert 'ARG NEXTCLOUD_SHA256=' in dockerfile and 'ARG NEXTCLOUD_KEY_FPR=28806A878AE423A28372792ED75899B9A724937A' in dockerfile
+assert 'verify-nextcloud.sh /tmp/nextcloud.tar.bz2 /tmp/nextcloud.tar.bz2.asc' in dockerfile
+assert dockerfile.index('verify-nextcloud.sh /tmp/nextcloud.tar.bz2') < dockerfile.index('tar -xjf /tmp/nextcloud.tar.bz2')

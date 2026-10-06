@@ -4,6 +4,10 @@ FROM debian:trixie-slim
 
 ARG BUILD_ARCH=amd64
 ARG NEXTCLOUD_VERSION=33.0.0
+# Official SHA256 of nextcloud-${NEXTCLOUD_VERSION}.tar.bz2; must change together with the version.
+ARG NEXTCLOUD_SHA256=6f7730902269c879f9f2ad4aa0a227cb16b5408ee46f093f68bd32633f741abf
+# Nextcloud release signing key (primary fingerprint) shipped as build/nextcloud-release-key.asc.
+ARG NEXTCLOUD_KEY_FPR=28806A878AE423A28372792ED75899B9A724937A
 ARG S6_OVERLAY_VERSION=3.2.1.0
 ARG BASHIO_VERSION=v0.17.5
 ARG TEMPIO_VERSION=2024.11.2
@@ -55,10 +59,13 @@ RUN case "${TARGETARCH:-${BUILD_ARCH}}" in \
  && chmod +x /usr/bin/tempio \
  && rm -rf /tmp/*
 
+COPY build/verify-nextcloud.sh build/nextcloud-release-key.asc /tmp/nextcloud-verify/
 RUN mkdir -p /var/www \
  && curl -fsSL "https://download.nextcloud.com/server/releases/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2" -o /tmp/nextcloud.tar.bz2 \
+ && curl -fsSL "https://download.nextcloud.com/server/releases/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2.asc" -o /tmp/nextcloud.tar.bz2.asc \
+ && bash /tmp/nextcloud-verify/verify-nextcloud.sh /tmp/nextcloud.tar.bz2 /tmp/nextcloud.tar.bz2.asc /tmp/nextcloud-verify/nextcloud-release-key.asc "${NEXTCLOUD_SHA256}" "${NEXTCLOUD_KEY_FPR}" \
  && tar -xjf /tmp/nextcloud.tar.bz2 -C /var/www \
- && rm -f /tmp/nextcloud.tar.bz2 \
+ && rm -rf /tmp/nextcloud.tar.bz2 /tmp/nextcloud.tar.bz2.asc /tmp/nextcloud-verify \
  && chown -R www-data:www-data /var/www/nextcloud \
  && mkdir -p /run/php /run/postgresql /run/redis /data/postgres /data/redis /data/nextcloud/config /data/nextcloud/custom_apps /share/nextcloud \
  && chown -R postgres:postgres /run/postgresql /data/postgres \
