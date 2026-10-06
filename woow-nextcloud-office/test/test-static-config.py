@@ -6,7 +6,9 @@ assert config['slug'] == 'woow-nextcloud-office'
 assert config['ingress'] is True
 assert config['panel_admin'] is False
 assert 'amd64' in config['arch']
-assert 'aarch64' in config['arch']
+# Prebuilt GHCR image, amd64 only until an aarch64 image (incl. CODE) is built and verified.
+assert config['arch'] == ['amd64']
+assert config['image'] == 'ghcr.io/woowtech/woow-ha-nextcloud-office-{arch}'
 assert config['backup'] == 'cold'
 text = (BASE / 'rootfs/etc/s6-overlay/s6-rc.d/init-nginx-config/run').read_text()
 for route in ['/hosting/', '/browser/', '/cool/']:

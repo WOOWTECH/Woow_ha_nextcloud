@@ -1,0 +1,137 @@
+name: Publish Nextcloud Office add-on image
+
+# A version bump in woow-nextcloud-office/config.yaml on main builds and pushes the
+# prebuilt image Home Assistant installs (no on-device build), checks it, then creates
+# the GitHub Release that Woow_HA_App_Store syncs from. Pushes to rc/** build a
+# release-candidate tag for isolated testing and never create a Release.
+
+on:
+  push:
+    branches:
+      - main
+      - 'rc/**'
+    paths:
+      - woow-nextcloud-office/**
+      - .github/workflows/publish-nextcloud-addon-images.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: publish-nextcloud-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/woowtech/woow-ha-nextcloud-office-amd64
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - name: Run unit and static tests
+        working-directory: woow-nextcloud-office
+        run: |
+          set -e
+          for t in test/test-*.py; do echo "== $t"; python3 "$t"; done
+          for f in $(find rootfs -type f \( -name run -o -name up \)) rootfs/usr/local/bin/* build/*.sh test/*.sh; do bash -n "$f"; done
+
+  publish:
+    name: Build, check and publish amd64 image
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read versions
+        id: v
+        shell: bash
+        run: |
+          version="$(awk -F': ' '$1 == "version" { gsub(/"/, "", $2); print $2; exit }' woow-nextcloud-office/config.yaml)"
+          [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          nc="$(awk -F= '/^ARG NEXTCLOUD_VERSION=/{print $2; exit}' woow-nextcloud-office/Dockerfile)"
+          [[ "${nc}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [[ "${GITHUB_REF}" == refs/heads/main ]]; then tag="${version}"; release=true; else tag="${version}-rc.${GITHUB_RUN_NUMBER}"; release=false; fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "nextcloud=${nc}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "release=${release}" >> "${GITHUB_OUTPUT}"
+          echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "${GITHUB_OUTPUT}"
+
+      - name: Skip a version that is already released
+        id: released
+        if: steps.v.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "::notice::v${VERSION} is already released; its image is not rebuilt"
+            echo "done=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Free disk space
+        if: steps.released.outputs.done != 'true'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.released.outputs.done != 'true'
+
+      - uses: docker/login-action@v3
+        if: steps.released.outputs.done != 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The Dockerfile verifies the Nextcloud archive (pinned SHA256 + release signature)
+      # before unpacking it; a mismatch fails the build.
+      - name: Build and push image
+        if: steps.released.outputs.done != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./woow-nextcloud-office
+          file: ./woow-nextcloud-office/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.v.outputs.tag }}
+          build-args: |
+            BUILD_ARCH=amd64
+            TARGETARCH=amd64
+            BUILD_VERSION=${{ steps.v.outputs.version }}
+            BUILD_DATE=${{ steps.v.outputs.created }}
+            BUILD_REF=${{ github.sha }}
+            BUILD_REPOSITORY=${{ github.repository }}
+
+      - name: Smoke test the pushed image (versions + real /init boot)
+        if: steps.released.outputs.done != 'true'
+        run: woow-nextcloud-office/test/ci-image-smoke.sh "${IMAGE}:${{ steps.v.outputs.tag }}" "${{ steps.v.outputs.nextcloud }}"
+
+      # Home Assistant pulls without credentials. A new GHCR package starts out private;
+      # releasing then would publish a version nobody can install.
+      - name: Check the image is publicly pullable
+        if: steps.released.outputs.done != 'true'
+        run: |
+          docker logout ghcr.io
+          if ! docker manifest inspect "${IMAGE}:${{ steps.v.outputs.tag }}" >/dev/null; then
+            echo "::error::${IMAGE}:${{ steps.v.outputs.tag }} is not publicly pullable. Make the package public (GitHub > Packages > woow-ha-nextcloud-office-amd64 > Package settings > Change visibility), then re-run this workflow."
+            exit 1
+          fi
+
+      - name: Create the GitHub Release
+        if: steps.v.outputs.release == 'true' && steps.released.outputs.done != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          awk -v v="## ${VERSION}" '$0 == v { on = 1; next } /^## / && on { exit } on' woow-nextcloud-office/CHANGELOG.md > notes.md
+          test -s notes.md || { echo "::error::CHANGELOG.md has no '## ${VERSION}' section"; exit 1; }
+          gh release create "v${VERSION}" --target "${GITHUB_SHA}" --title "${VERSION}" --notes-file notes.md
