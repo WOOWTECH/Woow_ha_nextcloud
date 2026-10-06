@@ -3,11 +3,6 @@
 FROM debian:trixie-slim
 
 ARG BUILD_ARCH=amd64
-ARG NEXTCLOUD_VERSION=33.0.0
-# Official SHA256 of nextcloud-${NEXTCLOUD_VERSION}.tar.bz2; must change together with the version.
-ARG NEXTCLOUD_SHA256=6f7730902269c879f9f2ad4aa0a227cb16b5408ee46f093f68bd32633f741abf
-# Nextcloud release signing key (primary fingerprint) shipped as build/nextcloud-release-key.asc.
-ARG NEXTCLOUD_KEY_FPR=28806A878AE423A28372792ED75899B9A724937A
 ARG S6_OVERLAY_VERSION=3.2.1.0
 ARG BASHIO_VERSION=v0.17.5
 ARG TEMPIO_VERSION=2024.11.2
@@ -60,6 +55,13 @@ RUN case "${TARGETARCH:-${BUILD_ARCH}}" in \
  && rm -rf /tmp/*
 
 COPY build/verify-nextcloud.sh build/nextcloud-release-key.asc /tmp/nextcloud-verify/
+# Declared here, after the OS/package layers, so changing the Nextcloud version only
+# rebuilds the Nextcloud layers (an ARG change invalidates every later RUN's cache).
+ARG NEXTCLOUD_VERSION=33.0.0
+# Official SHA256 of nextcloud-${NEXTCLOUD_VERSION}.tar.bz2; must change together with the version.
+ARG NEXTCLOUD_SHA256=6f7730902269c879f9f2ad4aa0a227cb16b5408ee46f093f68bd32633f741abf
+# Nextcloud release signing key (primary fingerprint) shipped as build/nextcloud-release-key.asc.
+ARG NEXTCLOUD_KEY_FPR=28806A878AE423A28372792ED75899B9A724937A
 RUN mkdir -p /var/www \
  && curl -fsSL "https://download.nextcloud.com/server/releases/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2" -o /tmp/nextcloud.tar.bz2 \
  && curl -fsSL "https://download.nextcloud.com/server/releases/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2.asc" -o /tmp/nextcloud.tar.bz2.asc \

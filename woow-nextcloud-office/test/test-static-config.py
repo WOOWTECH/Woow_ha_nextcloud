@@ -36,3 +36,5 @@ assert init_nc.index('apps.config.php') < init_nc.index('occ maintenance:install
 # No unconditional re-download on every boot; update only when the enabled check fails.
 assert 'occ app:install richdocuments || true' not in rich
 assert 'occ app:update richdocuments' in rich and 'app:getpath richdocuments' in rich
+# Version ARGs come after the OS package layer so a Nextcloud version bump keeps that cache.
+assert dockerfile.index('ARG NEXTCLOUD_VERSION=') > dockerfile.index('apt-get install -y --no-install-recommends \\\n      nginx')
