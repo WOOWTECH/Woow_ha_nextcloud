@@ -1,9 +1,11 @@
 name: Publish Nextcloud Office add-on image
 
 # A version bump in woow-nextcloud-office/config.yaml on main builds and pushes the
-# prebuilt image Home Assistant installs (no on-device build), checks it, then creates
-# the GitHub Release that Woow_HA_App_Store syncs from. Pushes to rc/** build a
-# release-candidate tag for isolated testing and never create a Release.
+# prebuilt image Home Assistant installs (no on-device build) and checks it; the job
+# "Release" then calls the Store's shared woow-addon-release.yml, which creates the
+# v<version> GitHub Release that Woow_HA_App_Store syncs from. A version that already
+# has a Release is not rebuilt (same-version images are immutable). Pushes to rc/**
+# build a release-candidate tag for isolated testing and never create a Release.
 # Pull requests run the unit tests and build the image without pushing it, then run
 # the same container smoke test (jobs "Unit tests" and "Build and smoke test amd64
 # image", the checks to require before merging).
@@ -132,6 +134,12 @@ jobs:
             echo "done=true" >> "${GITHUB_OUTPUT}"
           fi
 
+      - name: Check the CHANGELOG has this version
+        if: steps.v.outputs.release == 'true' && steps.released.outputs.done != 'true'
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: grep -qxF "## ${VERSION}" woow-nextcloud-office/CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## ${VERSION}' section"; exit 1; }
+
       - name: Free disk space
         if: steps.released.outputs.done != 'true'
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -180,12 +188,10 @@ jobs:
             exit 1
           fi
 
-      - name: Create the GitHub Release
-        if: steps.v.outputs.release == 'true' && steps.released.outputs.done != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.v.outputs.version }}
-        run: |
-          awk -v v="## ${VERSION}" '$0 == v { on = 1; next } /^## / && on { exit } on' woow-nextcloud-office/CHANGELOG.md > notes.md
-          test -s notes.md || { echo "::error::CHANGELOG.md has no '## ${VERSION}' section"; exit 1; }
-          gh release create "v${VERSION}" --target "${GITHUB_SHA}" --title "${VERSION}" --notes-file notes.md
+  release:
+    name: Release
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    uses: WOOWTECH/Woow_HA_App_Store/.github/workflows/woow-addon-release.yml@main
