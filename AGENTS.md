@@ -22,10 +22,14 @@ release mechanism is described in the Woow_HA_App_Store README (section
    image (same content, same file id), checks that `status.php` reports no
    upgrade needed and no maintenance mode, and uploads a new file. Keep them
    working when you change the admin account, the WebDAV path, trusted
-   domains or the port 8000 server; a failing check blocks the release. The
-   hook interface (environment, JSON report, `settings.yaml` time limits) is
-   in the Woow_HA_App_Store README, section "第 2 類 升級測試". A PR that
-   changes no version passes it in seconds. The result is in the job
+   domains or the port 8000 server; a failing check blocks the release. Keep
+   the hooks executable (`git update-index --chmod=+x`), with LF endings and a
+   `#!` of python3 or busybox sh only (no bash): they run in the Store's
+   python:3.12-alpine mock Supervisor container, so never `docker run` from
+   them. The hook interface (environment, JSON report, `settings.yaml` keys
+   `startup_timeout`, `stable_seconds`, `hook_timeout`) is in the
+   Woow_HA_App_Store README, "第 2 類 升級測試", paragraph "資料檢查（#138）".
+   A PR that changes no version passes it in seconds. The result is in the job
    summary. To re-run it, use "Re-run all jobs", not "Re-run failed jobs": a
    re-run judges its own build, and an earlier attempt's SBOM and image are not
    used.
