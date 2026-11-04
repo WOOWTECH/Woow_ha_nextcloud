@@ -17,8 +17,9 @@ verify   status.php reports installed, no upgrade needed and not in
 
 Credentials: the admin the add-on installed with, ADMIN_USER and ADMIN_PASS
 from the options the add-on booted with ($DATA_DIR_DATA/options.json, which
-Supervisor, or the upgrade test, writes). ADMIN_PASS is only used at the
-first install, so seed keeps them in HOOK_STATE_DIR and verify uses those.
+Supervisor, or the upgrade test, writes). Both hooks read them there
+(pipeline release-gating/157: the upgrade test gives both versions the same
+options); the seed state in HOOK_STATE_DIR never holds the password.
 
 Requests carry `Host: localhost` (one of the add-on's trusted_domains); the
 add-on's address is not one.
@@ -205,7 +206,6 @@ def seed() -> int:
 
     def credentials() -> str:
         nc.user, nc.password = admin_credentials()
-        state["user"], state["password"] = nc.user, nc.password
         return f"ADMIN_USER {nc.user} from options.json"
     creds = checks.run("admin credentials known", credentials)
     login = checks.run("admin logs in (WebDAV)", nc.login, bool(up) and bool(creds))
@@ -238,11 +238,15 @@ def verify() -> int:
                 loaded = json.load(f)
         except (OSError, ValueError) as error:
             raise AssertionError(f"seed state {state_path()} unreadable (did seed run?): {error}") from error
-        assert isinstance(loaded, dict) and loaded.get("user") and loaded.get("file"), f"seed state incomplete: {sorted(loaded)}"
-        nc.user, nc.password = str(loaded["user"]), str(loaded["password"])
+        assert isinstance(loaded, dict) and loaded.get("file"), f"seed state incomplete: {sorted(loaded)}"
         return loaded
     state = checks.run("seed state readable", read_state)
     seeded = state is not None
+
+    def credentials() -> str:
+        nc.user, nc.password = admin_credentials()
+        return f"ADMIN_USER {nc.user} from options.json"
+    creds = checks.run("admin credentials known", credentials)
 
     holder: dict[str, dict[str, object]] = {}
 
@@ -262,20 +266,21 @@ def verify() -> int:
     checks.run("no upgrade needed (migrations finished)", field("needsDbUpgrade", False, "an upgrade is still needed"), bool(answered))
     checks.run("not in maintenance mode", field("maintenance", False, "in maintenance mode"), bool(answered))
 
-    login = checks.run("admin logs in (WebDAV)", nc.login, bool(answered) and seeded)
+    login = checks.run("admin logs in (WebDAV)", nc.login, bool(answered) and bool(creds))
 
     def file_kept() -> str:
         got = nc.get(state["file"])
+        assert len(got) == state["size"], f"{state['file']} has {len(got)} bytes, not the {state['size']} seeded ones"
         assert hashlib.sha256(got).hexdigest() == state["sha256"], \
-            f"{state['file']} has {len(got)} bytes, not the {state['size']} seeded ones"
+            f"{state['file']} has the seeded {len(got)} bytes but different content (sha256 differs)"
         return f"{state['file']}: same {len(got)} bytes"
-    checks.run("file reads back the same", file_kept, bool(login))
+    checks.run("file reads back the same", file_kept, bool(login) and seeded)
 
     def same_id() -> str:
         props = nc.propfind(state["file"])
         assert props.get("fileid") == state["fileid"], f"file id {props.get('fileid')}, {state['fileid']} before the upgrade"
         return f"file id {state['fileid']} (the file cache was kept, not rebuilt)"
-    checks.run("file id unchanged", same_id, bool(login))
+    checks.run("file id unchanged", same_id, bool(login) and seeded)
 
     def new_upload() -> str:
         name, content = f"woow-upgrade-new-{secrets.token_hex(6)}.txt", secrets.token_hex(32).encode()
