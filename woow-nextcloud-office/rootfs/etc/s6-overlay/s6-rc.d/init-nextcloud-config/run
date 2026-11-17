@@ -10,8 +10,9 @@ until redis-cli -s /run/redis/redis.sock ping >/dev/null 2>&1; do sleep 1; done
 # and the partial database and install again. A config.php that does not parse is left alone.
 if [[ -s /data/nextcloud/config/config.php ]] && php -r 'try { include $argv[1]; } catch (Throwable $e) { exit(2); } exit(isset($CONFIG) && is_array($CONFIG) && empty($CONFIG["installed"]) ? 0 : 1);' -- /data/nextcloud/config/config.php; then
   echo "Nextcloud install did not finish last time; discarding the partial install and installing again."
-  rm -f /data/nextcloud/config/config.php
+  # Database first: if this is cut off, config.php is still there and the next start does this again.
   gosu postgres dropdb -h /run/postgresql --if-exists nextcloud
+  rm -f /data/nextcloud/config/config.php
 fi
 # DB/user are idempotent under local socket trust.
 DB_PASS_SQL=${DB_PASS//\'/\'\'}
