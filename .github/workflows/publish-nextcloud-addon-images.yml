@@ -116,6 +116,11 @@ jobs:
       - name: Smoke test the image (versions + real /init boot)
         run: woow-nextcloud-office/test/ci-image-smoke.sh "local/woow-ha-nextcloud-office-amd64:pr-${{ github.event.pull_request.number }}" "${{ steps.v.outputs.nextcloud }}"
 
+      # Collabora enabled: s6 startup finishes while richdocuments is still being configured,
+      # and a stop then and after it ends within 10 s, not in SIGKILL/137 (pipeline #224).
+      - name: s6 startup and stop test (Collabora enabled)
+        run: woow-nextcloud-office/test/test-s6-stop.sh "local/woow-ha-nextcloud-office-amd64:pr-${{ github.event.pull_request.number }}"
+
   # Upgrade comparison (pipeline #89): rules, inputs and re-runs are in the
   # Store README, "升版比對與 `upgrade-notes.yaml`".
   # The PR image and the published image are both built without a layer cache,
@@ -211,6 +216,10 @@ jobs:
       - name: Smoke test the pushed image (versions + real /init boot)
         if: steps.released.outputs.done != 'true'
         run: woow-nextcloud-office/test/ci-image-smoke.sh "${IMAGE}:${{ steps.v.outputs.tag }}" "${{ steps.v.outputs.nextcloud }}"
+
+      - name: s6 startup and stop test of the pushed image (Collabora enabled)
+        if: steps.released.outputs.done != 'true'
+        run: woow-nextcloud-office/test/test-s6-stop.sh "${IMAGE}:${{ steps.v.outputs.tag }}"
 
       # Home Assistant pulls without credentials. A new GHCR package starts out private;
       # releasing then would publish a version nobody can install.
