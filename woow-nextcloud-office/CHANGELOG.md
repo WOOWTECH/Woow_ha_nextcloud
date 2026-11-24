@@ -2,7 +2,7 @@
 
 ## 0.2.5
 
-- 停止 add-on 時不再被強制結束（exit 137）。Office（richdocuments）的設定原本是 s6 開機步驟，會等 Collabora 並執行十多個 `occ` 指令；在較慢的機器上這段沒跑完前停止，s6 會等到 Supervisor 的 10 秒期限被 SIGKILL，PostgreSQL、Redis 沒有正常關閉。現在這段設定在背景執行，nginx 起來後開機流程就完成，停止約 3 秒內正常結束。
+- 停止 add-on 時不再被強制結束（exit 137）。Office（richdocuments）的設定原本是 s6 開機步驟，會等 Collabora 並執行十多個 `occ` 指令；在較慢的機器上這段沒跑完前停止，s6 會等到 Supervisor 的 10 秒期限被 SIGKILL，PostgreSQL、Redis 沒有正常關閉。現在這段設定在背景執行，nginx 起來後開機流程就完成，停止通常約 4 秒內正常結束；Collabora 還在啟動時停止會接近 10 秒期限（實測 9.3 秒）。
 - Office 的行為不變：首次安裝會裝好 richdocuments，routes 修補與 WOPI 設定照舊。設定完成時 log 會印 `richdocuments configuration done`。
 - 開機初期（`init-nextcloud-config` 那段；較慢的機器上每次開機約 3 分鐘，首次安裝更久）停止仍可能等到期限被強制結束（exit 137）。首次安裝被中斷時，下次啟動會丟掉未完成的安裝並重裝（0.2.4）。
 - Nextcloud 版本不變（35.0.1）。
