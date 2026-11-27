@@ -70,6 +70,12 @@ occ config:app:set password_policy minLength --value 7 || true
 chmod 0750 /data/nextcloud/config
 find /data/nextcloud/config -maxdepth 1 -type f -name '*.php' -exec chmod 0640 {} +
 chmod 0770 "$NEXTCLOUD_DATADIR"
-# Disable first-run modal and notify_push unless explicitly configured later.
-occ app:disable firstrunwizard || true
-occ app:disable notify_push || true
+# Disable first-run modal and notify_push unless explicitly configured later. One app:list instead of
+# two app:disable calls when both are already disabled (each occ call boots Nextcloud, about 1.7 s on
+# an N2840, all inside the window in which a stop is SIGKILLed; pipeline unattended-pipeline/250).
+# If the list cannot be read, disable both as before.
+enabled_apps="$(occ app:list --output=json 2>/dev/null | jq -r '.enabled | keys[]' 2>/dev/null)" || enabled_apps='firstrunwizard
+notify_push'
+for app in firstrunwizard notify_push; do
+  if grep -qx "$app" <<<"$enabled_apps"; then occ app:disable "$app" || true; fi
+done
