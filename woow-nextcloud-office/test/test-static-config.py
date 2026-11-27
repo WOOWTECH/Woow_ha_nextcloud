@@ -44,3 +44,9 @@ assert dockerfile.index('ARG NEXTCLOUD_VERSION=') > dockerfile.index('apt-get in
 assert 'chmod 0640' in init_nc and 'chmod 0750 /data/nextcloud/config' in init_nc and 'chmod 0770 "$NEXTCLOUD_DATADIR"' in init_nc
 # config.php is written (nextcloud-system-config.php, pipeline #229) before its mode is re-asserted.
 assert init_nc.rindex('chmod 0640') > init_nc.index('nextcloud-system-config.php /data/nextcloud/config/config.php')
+# s6-linux-init-shutdownd always sleeps the full S6_KILL_GRACETIME after its final SIGTERM, after
+# every service (PostgreSQL included) has already stopped: 1 s instead of 3 s (pipeline #250).
+# Only the kill grace time is shortened; the services' own stop timeouts stay at their defaults.
+assert 'ENV S6_KILL_GRACETIME=1000' in dockerfile
+assert 'S6_SERVICES_GRACETIME' not in dockerfile and 'S6_KILL_FINISH_MAXTIME' not in dockerfile
+assert dockerfile.index('ENV S6_KILL_GRACETIME=1000') > dockerfile.index('ARG NEXTCLOUD_VERSION=')
