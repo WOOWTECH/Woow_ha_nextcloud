@@ -32,7 +32,10 @@ MY_GROUP = grp.getgrgid(os.getgid()).gr_name
 
 
 class ShellFlow(unittest.TestCase):
-    def run_init(self, user, group):
+    # occ app:list --output=json as on a normal boot: both apps already disabled.
+    DISABLED = '{"enabled":{"files":"2.0"},"disabled":{"firstrunwizard":"5.0"}}'
+
+    def run_init(self, user, group, app_list=DISABLED, app_list_exit=0):
         """Run the real run script; user:group replace www-data:www-data as the owner the tree must have."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -47,7 +50,8 @@ class ShellFlow(unittest.TestCase):
                 'php': 'case "$2" in *installed*) exit 1;; esac\n'
                        'printf "php %s PUBLIC_HOST=%s PUBLIC_URL=%s DEFAULT_PHONE_REGION=%s DB_PASS=%s\\n" '
                        '"$*" "$PUBLIC_HOST" "$PUBLIC_URL" "$DEFAULT_PHONE_REGION" "$DB_PASS" >> "$CALL_LOG"',
-                'occ': 'printf "occ %s\\n" "$*" >> "$CALL_LOG"',
+                'occ': 'printf "occ %s\\n" "$*" >> "$CALL_LOG"\n'
+                       'if [ "$1" = app:list ]; then printf "%s" "$APP_LIST"; exit "$APP_LIST_EXIT"; fi',
             }
             for name, body in stubs.items():
                 p = bindir / name
@@ -78,7 +82,8 @@ class ShellFlow(unittest.TestCase):
             test_script = root / 'init.sh'
             test_script.write_text(text)
             log = root / 'calls'
-            env = dict(os.environ, PATH=f'{bindir}:/usr/bin:/bin', CALL_LOG=str(log))
+            env = dict(os.environ, PATH=f'{bindir}:/usr/bin:/bin', CALL_LOG=str(log),
+                       APP_LIST=app_list, APP_LIST_EXIT=str(app_list_exit))
             result = subprocess.run(['/bin/bash', str(test_script)], env=env, capture_output=True, text=True, timeout=20)
             calls = log.read_text().splitlines() if log.exists() else []
             return result, [c.replace(str(root), '') for c in calls]
@@ -112,9 +117,29 @@ class ShellFlow(unittest.TestCase):
         self.assertEqual([c for c in calls if c.startswith('occ')], [
             'occ upgrade --no-interaction',
             'occ config:app:set password_policy minLength --value 7',
-            'occ app:disable firstrunwizard',
-            'occ app:disable notify_push',
+            'occ app:list --output=json',
         ])
+
+    # Disabling firstrunwizard/notify_push: two occ calls (about 3.5 s on an N2840, inside the window
+    # in which a stop ends in SIGKILL) only when one of them is still enabled (pipeline #250).
+    def disables(self, **kw):
+        result, calls = self.run_init('root', 'root', **kw)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return [c for c in calls if c.startswith('occ app:disable')]
+
+    def test_apps_already_disabled_are_not_disabled_again(self):
+        self.assertEqual(self.disables(), [])
+
+    def test_enabled_apps_are_still_disabled(self):
+        self.assertEqual(self.disables(app_list='{"enabled":{"firstrunwizard":"5.0","notify_push":"1.0"},"disabled":{}}'),
+                         ['occ app:disable firstrunwizard', 'occ app:disable notify_push'])
+        self.assertEqual(self.disables(app_list='{"enabled":{"notify_push":"1.0"},"disabled":{}}'),
+                         ['occ app:disable notify_push'])
+
+    def test_unreadable_app_list_disables_both_as_before(self):
+        both = ['occ app:disable firstrunwizard', 'occ app:disable notify_push']
+        self.assertEqual(self.disables(app_list='', app_list_exit=1), both)
+        self.assertEqual(self.disables(app_list='not json'), both)
 
 
 def find_php():

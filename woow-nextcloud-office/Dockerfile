@@ -79,5 +79,14 @@ RUN chmod +x /usr/local/bin/* \
  && find /etc/s6-overlay/s6-rc.d -name run -type f -exec chmod +x {} \; \
  && find /etc/s6-overlay/s6-rc.d -name up -type f -exec chmod +x {} \;
 
+# Stage 3 of every stop (pipeline unattended-pipeline/250): s6-linux-init-shutdownd sends
+# kill(-1, SIGTERM) and then always sleeps the whole S6_KILL_GRACETIME (default 3000 ms) before
+# kill(-1, SIGKILL); it does not check whether anything is still alive. It runs only after
+# s6-rc has stopped every service (PostgreSQL has already shut down cleanly, Redis has saved),
+# so at that point only s6-svscan and shutdownd itself are left and the 3 s are pure waiting.
+# 1 s still gives any stray process time to handle the TERM. Declared after the package and
+# Nextcloud layers so changing it keeps their cache.
+ENV S6_KILL_GRACETIME=1000
+
 EXPOSE 8000 8090
 ENTRYPOINT ["/init"]
