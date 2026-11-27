@@ -1,0 +1,44 @@
+#!/bin/bash
+# Run coolwsd for s6 so that a stop fits in Supervisor's 10 s (pipeline unattended-pipeline/250).
+# Usage: woow-coolwsd-run <coolwsd command> [args...]
+#
+# coolwsd told to stop while it is still starting only notices once its startup reaches a certain
+# point (about 5.6 s on an N2840, "Shutdown requested while starting up"). On s6's SIGTERM:
+# - not ready yet (discovery does not answer): SIGKILL coolwsd and its child processes; no
+#   document can be open yet;
+# - ready: forward SIGTERM, so open documents are saved and closed as before.
+# coolwsd exiting on its own makes this script exit with the same code; s6 restarts the service.
+set -u
+ready_url=http://127.0.0.1:9980/hosting/discovery
+
+descendants() {
+  local c
+  for c in $(pgrep -P "$1"); do echo "$c"; descendants "$c"; done
+}
+
+on_term() {
+  term=1
+  if curl -fsS -o /dev/null -m 2 "$ready_url" 2>/dev/null; then
+    kill -TERM "$child" 2>/dev/null
+  else
+    echo "coolwsd is still starting; stopping it with SIGKILL"
+    # Freeze the tree first so nothing forks between listing and killing it.
+    local pids
+    pids="$child $(descendants "$child")"
+    kill -STOP $pids 2>/dev/null
+    pids="$child $(descendants "$child")"
+    kill -KILL $pids 2>/dev/null
+  fi
+}
+
+"$@" &
+child=$!
+trap on_term TERM
+while :; do
+  term=
+  wait "$child"
+  status=$?
+  # wait returns early when the trap runs; wait again for coolwsd's own exit status.
+  [[ -n "$term" ]] || break
+done
+exit "$status"

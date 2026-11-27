@@ -4,7 +4,8 @@ source /run/woow-office/env
 if [[ "$ENABLE_COLLABORA" != "true" ]]; then exec sleep infinity; fi
 mkdir -p /data/coolwsd-jail /data/coolwsd-cache /var/cache/coolwsd
 chown -R cool:cool /data/coolwsd-jail /data/coolwsd-cache /var/cache/coolwsd 2>/dev/null || true
-exec gosu cool /usr/bin/coolwsd \
+# woow-coolwsd-run: SIGKILL while coolwsd is still starting, SIGTERM once ready (unattended-pipeline/250).
+exec woow-coolwsd-run gosu cool /usr/bin/coolwsd \
   --version \
   --o:sys_template_path=/opt/cool/systemplate \
   --o:child_root_path=/data/coolwsd-jail \
