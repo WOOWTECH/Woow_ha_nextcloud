@@ -1,6 +1,7 @@
 #!/command/with-contenv bash
 set -euo pipefail
-mkdir -p /run/woow-office /data/nextcloud/config /data/nextcloud/custom_apps /data/postgres /data/redis /share/nextcloud
+# No /share/nextcloud here: init-nextcloud-config creates the configured NEXTCLOUD_DATADIR.
+mkdir -p /run/woow-office /data/nextcloud/config /data/nextcloud/custom_apps /data/postgres /data/redis
 PUBLIC_URL="$(woow-options NEXTCLOUD_PUBLIC_URL https://woowtech-nextcloud.woowtech.io)"; PUBLIC_URL="${PUBLIC_URL%/}"
 PUBLIC_HOST="${PUBLIC_URL#http://}"; PUBLIC_HOST="${PUBLIC_HOST#https://}"; PUBLIC_HOST="${PUBLIC_HOST%%/*}"
 HA_PUBLIC_URL="$(woow-options HA_PUBLIC_URL https://woowtech-ha.woowtech.io)"; HA_PUBLIC_URL="${HA_PUBLIC_URL%/}"
@@ -26,7 +27,10 @@ DEFAULT_PHONE_REGION='$(woow-options DEFAULT_PHONE_REGION TW)'
 ENABLE_COLLABORA='$(woow-options ENABLE_COLLABORA true)'
 ENABLE_COLLABORA_ADMIN='$(woow-options ENABLE_COLLABORA_ADMIN true)'
 ENV
-chown -R www-data:www-data /data/nextcloud /share/nextcloud
-chown -R postgres:postgres /data/postgres /run/postgresql
-chown -R redis:redis /data/redis /run/redis
+# /data/nextcloud and the data directory: init-nextcloud-config fixes their owners (pipeline
+# unattended-pipeline/250; a hard-coded /share/nextcloud here changed a customer's directory even
+# when NEXTCLOUD_DATADIR points elsewhere). Here only entries with another owner (e.g. after a
+# restore); nothing is written when the owners are already right.
+find /data/postgres /run/postgresql \( ! -user postgres -o ! -group postgres \) -exec chown -h postgres:postgres {} +
+find /data/redis /run/redis \( ! -user redis -o ! -group redis \) -exec chown -h redis:redis {} +
 chmod 700 /data/postgres
