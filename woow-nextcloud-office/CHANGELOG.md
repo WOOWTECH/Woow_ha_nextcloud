@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.7
+
+- 開機期間停止不再被強制結束（exit 137）。Collabora（coolwsd）還在啟動時收到停止，原本要約 5.6 秒才結束；現在還沒 ready（`/hosting/discovery` 沒回應）時直接 SIGKILL coolwsd 和它的子 process（這時不可能有開著的文件）。已經 ready 時照舊轉送 SIGTERM，開著的文件正常收尾。coolwsd 自己當掉時 s6 照樣重啟它。
+- 每次停止的最後少等 2 秒：s6-overlay 收尾時（所有服務、包括 PostgreSQL 都已正常關閉之後）一定會等滿 `S6_KILL_GRACETIME`，預設 3 秒，現在改成 1 秒。
+- `init-env` 不再改 `/share/nextcloud` 的擁有者，也不再建立它：原本每次開機都對寫死的 `/share/nextcloud` 遞迴 `chown www-data`，即使資料目錄（`NEXTCLOUD_DATADIR`）設在別處。資料目錄的擁有者仍由之後的開機步驟修正（只改擁有者不對的檔案）。PostgreSQL、Redis 目錄也改成只改擁有者不對的檔案，restore 後擁有者錯的檔案仍會修正。
+- firstrunwizard、notify_push 已經停用時，開機不再執行兩次 `occ app:disable`（N2840 上約 3.5 秒）。還沒停用時照舊停用。
+- Nextcloud 版本不變（35.0.1）。
+
 ## 0.2.6
 
 - 一般開機的 `init-nextcloud-config` 縮短：N2840 實測每次開機約 3–3.5 分鐘 → 約 9 秒。原本每次開機都對 Nextcloud 程式目錄、`/data/nextcloud` 與資料目錄做遞迴 `chown`，image 裡的程式目錄因此每次都被整棵複製進容器（約 850 MB）；現在只改擁有者不是 `www-data:www-data` 的檔案，restore 後擁有者錯的檔案仍會修正。13 個 `occ config:system:set` 改成一次寫入 `config.php`，寫入的值和之前相同。
